@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Umojee Emergency - Emergency Contacts</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="mobile-container">
+        <div class="app-container">
+            <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <div class="logo-small">🚨</div>
+                <div class="header-text">
+                    <h1>Umojee</h1>
+                    <p>Emergency Management System</p>
+                </div>
+            </div>
+        </header>
+        
+        <!-- Navigation Tabs -->
+        <nav class="app-nav">
+            <a href="/profile.html" class="nav-tab">
+                <span class="tab-icon">👤</span>
+                <span class="tab-label">Profile</span>
+            </a>
+            <a href="/contacts.html" class="nav-tab active">
+                <span class="tab-icon">📞</span>
+                <span class="tab-label">Contacts</span>
+            </a>
+            <button onclick="logout()" class="nav-tab logout-btn">
+                <span class="tab-icon">🚪</span>
+                <span class="tab-label">Logout</span>
+            </button>
+        </nav>
+        
+        <!-- Main Content -->
+        <main class="app-content">
+            <div class="contacts-card">
+                <div class="card-header">
+                    <h2>Emergency Contacts</h2>
+                    <p class="card-subtitle">Add people to contact in case of emergency</p>
+                </div>
+                
+                <div id="contactsList" class="contacts-list">
+                    <!-- Contacts will be loaded here dynamically -->
+                </div>
+                
+                <form id="contactsForm" class="contacts-form">
+                    <div id="contactsContainer">
+                        <!-- Contact forms will be generated here -->
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <span>💾 Save Changes</span>
+                    </button>
+                </form>
+                
+                <div id="successMessage" class="success-message" style="display: none;"></div>
+                <div id="errorMessage" class="error-message" style="display: none;"></div>
+            </div>
+        </main>
+        </div>
+    </div>
+    
+    <script src="/static/app.js"></script>
+</body>
+</html>

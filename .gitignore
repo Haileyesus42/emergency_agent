@@ -1,0 +1,73 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+env/
+.venv/
+*.env
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+.hypothesis/
+
+# Database - all database files should be excluded
+*.db
+
+# Flutter (if added later)
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+*.lockb
+.pub-cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Local configs
+config.local/
+
+# Ngrok
+.ngrok/
+ngrok.log
+
+# Backup files
+*.bak
+*.tmp
+*.backup_*
+
+# Archive files
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# Compiled files
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.dylib
+
+# Virtual environments
+emergency_agent_env/
+venv*/

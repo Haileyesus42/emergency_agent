@@ -1,0 +1,30 @@
+# GitLab CI configuration
+
+stages:
+  - test
+  - deploy
+
+test:
+  stage: test
+  script:
+    - echo "Running tests..."
+    - cd backend
+    - python -m pip install --upgrade pip
+    - pip install -r requirements.txt
+    - python -c "import sys; print(sys.version)"
+    - echo "Backend imports test:"
+    - python -c "import main; print('Main module imports successfully')"
+  artifacts:
+    expire_in: 1 day
+    paths:
+      - backend/
+
+pages:
+  stage: deploy
+  script:
+    - echo "Publishing static pages..."
+  artifacts:
+    paths:
+      - frontend/
+  only:
+    - main

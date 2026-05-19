@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Umojee Emergency - Login</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="login-page">
+    <div class="mobile-container">
+        <div class="login-container">
+            <div class="login-card">
+                <div class="login-header">
+                    <div class="logo-icon">🚨</div>
+                    <h1>Umojee</h1>
+                    <p class="subtitle">Emergency Management System</p>
+                </div>
+                
+                <form id="loginForm" class="login-form">
+                    <div class="form-group">
+                        <label for="username">
+                            <span class="icon">👤</span> Username
+                        </label>
+                        <input 
+                            type="text" 
+                            id="username" 
+                            name="username" 
+                            placeholder="Enter your username"
+                            required
+                            autocomplete="username"
+                        >
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="password">
+                            <span class="icon">🔒</span> Password
+                        </label>
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            placeholder="Enter your password"
+                            required
+                            autocomplete="current-password"
+                        >
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <span>Login</span>
+                        <span class="arrow">→</span>
+                    </button>
+                    
+                    <div id="errorMessage" class="error-message" style="display: none;"></div>
+                </form>
+                
+                <div class="login-footer">
+                    <div class="demo-badge">Demo Accounts</div>
+                    <div class="demo-accounts">
+                        <div class="demo-item">
+                            <span class="demo-label">User 1:</span>
+                            <code>haile / 1234</code>
+                        </div>
+                        <div class="demo-item">
+                            <span class="demo-label">User 2:</span>
+                            <code>traveler1 / 1234</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/static/app.js"></script>
+</body>
+</html>
