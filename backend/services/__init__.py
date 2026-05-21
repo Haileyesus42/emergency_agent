@@ -12,3 +12,9 @@ except ImportError as e:
     def make_emergency_call(phone_number: str, emergency_context: dict):
         print("Vapi service not available. Would make emergency call to:", phone_number)
         return None
+
+# Import WhatsApp service separately to handle potential errors
+try:
+    from .whatsapp_service import *
+except ImportError as e:
+    print(f"Warning: Could not import WhatsApp service: {e}")

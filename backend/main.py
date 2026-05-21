@@ -9,9 +9,12 @@ import sys
 import os
 import json
 
-# Load environment variables
+# Load environment variables from project root .env file
 from dotenv import load_dotenv
-load_dotenv()
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+env_path = os.path.join(project_root, '.env')
+load_dotenv(dotenv_path=env_path)
+print(f"✅ Loaded .env from: {env_path}")
 
 # Add the backend directory to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -222,7 +225,8 @@ def emergency_webhook(signal: EmergencySignal):
                     "traveler_phone": user.phone or "Not available",
                     "signal_type": signal.signal,
                     "contact_name": primary_contact.contact_name,
-                    "relationship": primary_contact.relationship or "Unknown"
+                    "relationship": primary_contact.relationship or "Unknown",
+                    "contact_phone": primary_contact.phone  # Add contact phone for WhatsApp fallback
                 }
                 
                 print(f"\n📱 INITIATING EMERGENCY CALL TO: {primary_contact.contact_name} ({primary_contact.relationship})")
@@ -251,7 +255,6 @@ def emergency_webhook(signal: EmergencySignal):
                     print(f"   Call logged in emergency logs with ID: {emergency_log.id}")
                 else:
                     print(f"\n❌ FAILED TO INITIATE EMERGENCY CALL")
-                    
             else:
                 print("\n⚠️  No emergency contacts found")
             
@@ -308,67 +311,130 @@ async def vapi_webhook(request: Request):
     body = await request.body()
     payload = json.loads(body.decode('utf-8'))
     
-    # Log the received webhook
+    # Extract message data - Vapi wraps everything in 'message' field
+    message = payload.get('message', {})
+    
+    # Determine event type from message.type
+    event_type = message.get('type', 'unknown')
+    
+    # Extract call information - it's nested inside message.call
+    call_data = message.get('call', {})
+    call_id = call_data.get('id', 'unknown')
+    call_status = message.get('status') or call_data.get('status')
+    ended_reason = message.get('endedReason')
+    
     print(f"\n🔔 VAPI WEBHOOK RECEIVED:")
-    print(f"Type: {payload.get('type', 'unknown')}")
-    print(f"Call SID: {payload.get('call', {}).get('id', 'unknown')}")
+    print(f"Event Type: {event_type}")
+    print(f"Call ID: {call_id}")
+    print(f"Call Status: {call_status}")
+    if ended_reason:
+        print(f"Ended Reason: {ended_reason}")
+    
+    # Determine if call was answered based on endedReason
+    call_answered = None
+    if ended_reason:
+        # Common Vapi endedReason values:
+        # - "customer-did-not-answer" = NOT answered
+        # - "assistant-error" = NOT answered (technical issue)
+        # - "normal-call-disconnect" = WAS answered and completed normally
+        # - "busy" = NOT answered (line busy)
+        # - "no-answer" = NOT answered
+        
+        answered_reasons = ['normal-call-disconnect', 'completed', 'answered']
+        not_answered_reasons = ['customer-did-not-answer', 'busy', 'no-answer', 'assistant-error', 'timeout']
+        
+        ended_normalized = ended_reason.lower().replace('-', '_')
+        if ended_normalized in [r.replace('-', '_') for r in answered_reasons]:
+            call_answered = True
+            print(f"✅ Call WAS ANSWERED")
+        elif ended_normalized in [r.replace('-', '_') for r in not_answered_reasons]:
+            call_answered = False
+            print(f"❌ Call was NOT ANSWERED")
     
     # Process different types of events
-    event_type = payload.get('type')
-    
     db = SessionLocal()
     try:
-        if event_type == 'call-ended':
-            # Handle call ended event
-            call_sid = payload.get('call', {}).get('id')
-            status = payload.get('call', {}).get('status')
-            duration = payload.get('call', {}).get('durationSeconds')
+        if event_type in ['status-update', 'end-of-call-report'] and call_id != 'unknown':
+            # Handle call status updates and end reports
             
             # Find the corresponding emergency log entry using the service
-            emergency_log = get_emergency_log_by_call_sid(db, call_sid)
+            emergency_log = get_emergency_log_by_call_sid(db, call_id)
             
             if emergency_log:
-                # Update the log with call details using the service
-                updated_log = update_emergency_log(
-                    db,
-                    emergency_log.id,
-                    call_status=status,
-                    call_duration=duration
-                )
+                # Update the log with call details
+                update_kwargs = {'call_status': call_status}
                 
-                # Extract transcript if available
-                messages = payload.get('call', {}).get('messages', [])
-                transcript_messages = []
-                for msg in messages:
-                    if msg.get('role') in ['user', 'assistant']:
-                        transcript_messages.append(f"{msg.get('role', 'unknown')}: {msg.get('content', '')}")
+                # Add duration if available (from end-of-call-report)
+                if message.get('durationSeconds'):
+                    update_kwargs['call_duration'] = message.get('durationSeconds')
                 
-                if transcript_messages:
-                    update_emergency_log(
-                        db,
-                        emergency_log.id,
-                        transcript='\n'.join(transcript_messages)
-                    )
+                updated_log = update_emergency_log(db, emergency_log.id, **update_kwargs)
                 
-                print(f"✅ Emergency log updated for call {call_sid}")
+                # Extract transcript if available (from end-of-call-report)
+                transcript = message.get('transcript') or call_data.get('transcript')
+                if transcript:
+                    update_emergency_log(db, emergency_log.id, transcript=transcript)
+                
+                # Log whether call was answered
+                if call_answered is not None:
+                    answer_status = "ANSWERED ✅" if call_answered else "NOT ANSWERED ❌"
+                    print(f"📞 Call Answer Status: {answer_status}")
+                    
+                    # If call was NOT answered, send WhatsApp fallback
+                    if call_answered == False:
+                        print(f"\n🚨 CALL NOT ANSWERED - TRIGGERING WHATSAPP FALLBACK")
+                        
+                        # Parse emergency context to get contact info
+                        import json as json_module
+                        try:
+                            # Handle both JSON string and dict formats
+                            context = emergency_log.emergency_context
+                            if isinstance(context, str):
+                                context = json_module.loads(context)
+                            elif isinstance(context, dict):
+                                pass  # Already a dict
+                            else:
+                                context = {}
+                            
+                            # Extract contact phone with fallback
+                            contact_phone = (
+                                context.get('contact_phone') or 
+                                context.get('phone') or 
+                                ''
+                            )
+                            
+                            if not contact_phone:
+                                print(f"⚠️  WARNING: No contact phone found in emergency context!")
+                                print(f"   Available keys: {list(context.keys())}")
+                            
+                            # Send WhatsApp to the emergency contact
+                            from services.whatsapp_service import send_emergency_whatsapp
+                            
+                            whatsapp_result = send_emergency_whatsapp(
+                                contact_name=context.get('contact_name', 'Emergency Contact'),
+                                relationship=context.get('relationship', 'Unknown'),
+                                phone=contact_phone,
+                                traveler_name=context.get('traveler_name', 'Unknown'),
+                                location=context.get('current_location', 'Unknown'),
+                                gps=context.get('gps', 'Unknown'),
+                                hotel=context.get('hotel', 'Unknown'),
+                                signal_type=context.get('signal_type', 'SOS_BUTTON')
+                            )
+                            
+                            if whatsapp_result['success']:
+                                print(f"✅ WhatsApp fallback sent successfully!")
+                                print(f"   Message SID: {whatsapp_result.get('message_sid')}")
+                            else:
+                                print(f"❌ WhatsApp fallback failed: {whatsapp_result.get('error')}")
+                                
+                        except Exception as e:
+                            print(f"❌ Error sending WhatsApp fallback: {str(e)}")
+                            import traceback
+                            traceback.print_exc()
+                
+                print(f"✅ Emergency log updated for call {call_id} - Status: {call_status}")
             else:
-                print(f"⚠️  No matching emergency log found for call {call_sid}")
-                
-        elif event_type in ['call-started', 'call-ringing', 'call-in-progress']:
-            # Handle other call states
-            call_sid = payload.get('call', {}).get('id')
-            status = payload.get('call', {}).get('status')
-            
-            # Find the corresponding emergency log entry using the service
-            emergency_log = get_emergency_log_by_call_sid(db, call_sid)
-            
-            if emergency_log:
-                update_emergency_log(
-                    db,
-                    emergency_log.id,
-                    call_status=status
-                )
-                print(f"✅ Emergency log status updated to {status} for call {call_sid}")
+                print(f"⚠️  No matching emergency log found for call {call_id}")
                 
         else:
             print(f"ℹ️  Unhandled event type: {event_type}")
@@ -377,6 +443,8 @@ async def vapi_webhook(request: Request):
         
     except Exception as e:
         print(f"❌ Error processing webhook: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {"status": "error", "message": str(e)}
     finally:
         db.close()
