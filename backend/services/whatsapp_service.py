@@ -1,8 +1,3 @@
-"""
-WhatsApp Service for sending emergency notifications
-Uses Twilio API to send WhatsApp messages
-"""
-
 import os
 from dotenv import load_dotenv
 
@@ -145,10 +140,10 @@ Dear {contact_name} ({relationship}),
 
 This is an automated emergency notification from Umojee Emergency System.
 
-👤 TRAVELER: {traveler_name}
-📍 LOCATION: {location}
-🗺️ GPS: {gps}
-🏨 HOTEL: {hotel}
+   TRAVELER: {traveler_name}
+   LOCATION: {location}
+   GPS: {gps}
+   HOTEL: {hotel}
 
 ⚠️ An emergency SOS signal was triggered but we couldn't reach you by phone.
 

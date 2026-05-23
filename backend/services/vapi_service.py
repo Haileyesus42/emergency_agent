@@ -87,38 +87,76 @@ class VapiService:
             logger.info(f"Emergency Context: {emergency_context}")
             logger.info(f"Payload: {payload}")
 
-            response = requests.post(
-                url,
-                json=payload,
-                headers=headers,
-                timeout=30
-            )
+            # Retry logic - try up to 3 times with increasing timeouts
+            max_retries = 3
+            last_error = None
+            
+            for attempt in range(1, max_retries + 1):
+                try:
+                    logger.info(f"Attempt {attempt}/{max_retries}...")
+                    
+                    # Increase timeout with each retry (30s, 45s, 60s)
+                    timeout = 30 + (attempt - 1) * 15
+                    
+                    response = requests.post(
+                        url,
+                        json=payload,
+                        headers=headers,
+                        timeout=timeout
+                    )
 
-            logger.info("========================================")
-            logger.info(f"VAPI STATUS CODE: {response.status_code}")
-            logger.info(f"VAPI RESPONSE: {response.text}")
-            logger.info("========================================")
+                    logger.info("========================================")
+                    logger.info(f"VAPI STATUS CODE: {response.status_code}")
+                    logger.info(f"VAPI RESPONSE: {response.text}")
+                    logger.info("========================================")
 
-            # Success
-            if response.status_code in [200, 201]:
-                result = response.json()
-                logger.info(
-                    f"Emergency call initiated successfully. "
-                    f"Call ID: {result.get('id', 'unknown')}"
-                )
-                return result
-            else:
-                logger.error(
-                    f"Failed to initiate emergency call. "
-                    f"Status: {response.status_code}, Response: {response.text}"
-                )
-                return None
-
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error making emergency call: {str(e)}")
+                    # Success
+                    if response.status_code in [200, 201]:
+                        result = response.json()
+                        logger.info(
+                            f"Emergency call initiated successfully on attempt {attempt}. "
+                            f"Call ID: {result.get('id', 'unknown')}"
+                        )
+                        return result
+                    else:
+                        logger.error(
+                            f"Failed to initiate emergency call. "
+                            f"Status: {response.status_code}, Response: {response.text}"
+                        )
+                        return None
+                        
+                except requests.exceptions.Timeout as e:
+                    last_error = e
+                    logger.warning(f"Attempt {attempt} timed out after {timeout}s: {str(e)}")
+                    if attempt < max_retries:
+                        logger.info(f"Retrying in 2 seconds...")
+                        import time
+                        time.sleep(2)  # Wait before retry
+                    continue
+                    
+                except requests.exceptions.ConnectionError as e:
+                    last_error = e
+                    logger.error(f"Connection error on attempt {attempt}: {str(e)}")
+                    logger.error("This could be due to:")
+                    logger.error("  - Network connectivity issues")
+                    logger.error("  - Firewall/proxy blocking api.vapi.ai")
+                    logger.error("  - DNS resolution problems")
+                    logger.error("  - Vapi API server temporarily unavailable")
+                    return None
+                    
+                except requests.exceptions.RequestException as e:
+                    last_error = e
+                    logger.error(f"Request error on attempt {attempt}: {str(e)}")
+                    return None
+            
+            # All retries failed
+            logger.error(f"All {max_retries} attempts failed. Last error: {str(last_error)}")
             return None
+
         except Exception as e:
             logger.error(f"Unexpected error making emergency call: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return None
 
 

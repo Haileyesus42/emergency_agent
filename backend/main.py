@@ -27,6 +27,7 @@ from services.user_service import create_mock_users
 from services.contact_service import create_mock_emergency_contacts
 from services.travel_service import create_mock_travel_history
 from services.vapi_service import make_emergency_call
+from services.whatsapp_service import send_emergency_whatsapp
 from services.emergency_log_service import create_emergency_log, update_emergency_log, get_emergency_log_by_call_sid
 
 # Create FastAPI app
@@ -254,7 +255,47 @@ def emergency_webhook(signal: EmergencySignal):
                     
                     print(f"   Call logged in emergency logs with ID: {emergency_log.id}")
                 else:
-                    print(f"\n❌ FAILED TO INITIATE EMERGENCY CALL")
+                    print(f"\n❌ FAILED TO INITIATE EMERGENCY CALL VIA VAPI")
+                    print(f"   ⚠️  FALLING BACK TO WHATSAPP NOTIFICATION...")
+                    
+                    # Fallback to WhatsApp
+                    try:
+                        whatsapp_result = send_emergency_whatsapp(
+                            contact_name=primary_contact.contact_name,
+                            relationship=primary_contact.relationship or "Unknown",
+                            phone=primary_contact.phone,
+                            traveler_name=emergency_context_dict['traveler_name'],
+                            location=emergency_context_dict['current_location'],
+                            gps=emergency_context_dict['gps'],
+                            hotel=emergency_context_dict['hotel'],
+                            signal_type=signal.signal
+                        )
+                        
+                        if whatsapp_result and whatsapp_result.get('success'):
+                            print(f"\n✅ WHATSAPP FALLBACK SENT SUCCESSFULLY")
+                            if whatsapp_result.get('real_message'):
+                                print(f"   Message SID: {whatsapp_result.get('message_sid')}")
+                            else:
+                                print(f"   Mode: SIMULATION")
+                            
+                            # Log the WhatsApp fallback
+                            emergency_log = create_emergency_log(
+                                db=db,
+                                user_id=user.id,
+                                contact_id=primary_contact.id,
+                                call_sid=f"WHATSAPP_{whatsapp_result.get('message_sid', 'fallback')}",
+                                signal_type=signal.signal,
+                                emergency_context=emergency_context_dict
+                            )
+                            print(f"   WhatsApp notification logged with ID: {emergency_log.id}")
+                        else:
+                            print(f"\n❌ WHATSAPP FALLBACK ALSO FAILED")
+                            if whatsapp_result:
+                                print(f"   Error: {whatsapp_result.get('error', 'Unknown error')}")
+                    except Exception as e:
+                        print(f"\n❌ ERROR SENDING WHATSAPP FALLBACK: {str(e)}")
+                        import traceback
+                        traceback.print_exc()
             else:
                 print("\n⚠️  No emergency contacts found")
             

@@ -1,32 +1,38 @@
+# Environment variables - NEVER commit these!
+.env
+.env.local
+.env.production
+
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 venv/
 ENV/
 env/
-.venv/
-*.env
-*.egg-info/
-dist/
-build/
-.pytest_cache/
-.coverage
-htmlcov/
-.hypothesis/
+.venv
 
-# Database - all database files should be excluded
+# Database
 *.db
-
-# Flutter (if added later)
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-build/
-*.lockb
-.pub-cache/
+*.sqlite
+*.sqlite3
 
 # IDE
 .vscode/
@@ -39,35 +45,30 @@ build/
 .DS_Store
 Thumbs.db
 
+# Flutter/Dart
+emergency_app/build/
+emergency_app/.dart_tool/
+emergency_app/.flutter-plugins
+emergency_app/.flutter-plugins-dependencies
+emergency_app/.packages
+emergency_app/pubspec.lock
+
+# Android
+emergency_app/android/app/key.properties
+emergency_app/android/.gradle/
+emergency_app/android/captures/
+emergency_app/android/local.properties
+
+# iOS
+emergency_app/ios/Pods/
+emergency_app/ios/.symlinks/
+emergency_app/ios/Flutter/ephemeral/
+
+# Web
+emergency_app/web/packages/
+
 # Logs
 *.log
-logs/
-
-# Local configs
-config.local/
-
-# Ngrok
-.ngrok/
-ngrok.log
-
-# Backup files
-*.bak
-*.tmp
-*.backup_*
-
-# Archive files
-*.tar.gz
-*.zip
-*.rar
-*.7z
-
-# Compiled files
-*.pyc
-*.pyo
-*.pyd
-*.so
-*.dylib
-
-# Virtual environments
-emergency_agent_env/
-venv*/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
