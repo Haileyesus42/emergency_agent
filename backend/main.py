@@ -8,6 +8,7 @@ from typing import Optional
 import sys
 import os
 import json
+from datetime import datetime
 
 # Load environment variables from project root .env file
 from dotenv import load_dotenv
@@ -107,7 +108,7 @@ def get_emergency_logs(skip: int = 0, limit: int = 100, db: Session = Depends(ge
     logs = db.query(EmergencyLog).offset(skip).limit(limit).all()
     return {"logs": logs, "total": len(logs)}
 
-def generate_emergency_context(user, travel_records, contacts):
+def generate_emergency_context(user, travel_records, contacts, signal=None):
     """
     Generate a structured emergency context message using user and travel information
     """
@@ -142,8 +143,8 @@ EMERGENCY CONTACTS:
 {os.linesep.join([f'- {contact}' for contact in contact_list]) if contact_list else 'No emergency contacts available'}
 
 SOS SIGNAL:
-Signal Type: {signal.signal if 'signal' in globals() else 'Not specified'}
-Timestamp: {os.times().elapsed if hasattr(os, 'times') else 'Current time'}
+Signal Type: {signal.signal if signal else 'Not specified'}
+Timestamp: {signal.timestamp if signal and signal.timestamp else datetime.now().isoformat()}
 
 Additional Information:
 No additional notes available
@@ -156,6 +157,7 @@ class EmergencySignal(BaseModel):
     type: str
     user_name: str
     signal: str
+    timestamp: Optional[str] = None
 
 @app.post("/emergency/webhook")
 def emergency_webhook(signal: EmergencySignal):
@@ -217,26 +219,96 @@ def emergency_webhook(signal: EmergencySignal):
                 # Select the first priority contact for the emergency call
                 primary_contact = contacts[0]  # First priority contact
                 
-                # Create emergency context dictionary for Vapi
-                emergency_context_dict = {
-                    "traveler_name": user.full_name or user.username,
+                # Get secondary contact if available
+                secondary_contact = contacts[1] if len(contacts) > 1 else None
+                
+                # Get travel history for trip data
+                from models.travel_history import TravelHistory
+                travel_records = db.query(TravelHistory).filter(
+                    TravelHistory.user_id == user.id
+                ).all()
+                
+                # Prepare traveler data structure
+                traveler_data = {
+                    "name": user.full_name or user.username,
+                    "phone": user.phone or "Not available",
+                    "email": user.email or "Not available",
                     "current_location": user.current_location or f"{user.current_city or 'Unknown'}, {user.current_country or 'Unknown'}",
                     "gps": f"{user.gps_latitude}, {user.gps_longitude}" if user.gps_latitude and user.gps_longitude else "Not available",
                     "hotel": user.hotel_name or user.address or "Not specified",
-                    "traveler_phone": user.phone or "Not available",
-                    "signal_type": signal.signal,
-                    "contact_name": primary_contact.contact_name,
-                    "relationship": primary_contact.relationship or "Unknown",
-                    "contact_phone": primary_contact.phone  # Add contact phone for WhatsApp fallback
+                    "address": user.address or "Not available"
+                }
+                
+                # Prepare SOS data structure
+                sos_data = {
+                    "status": "ACTIVE",
+                    "signalType": signal.signal,
+                    "timestamp": signal.timestamp or datetime.now().isoformat(),
+                    "locationName": user.current_location or f"{user.current_city or 'Unknown'}, {user.current_country or 'Unknown'}",
+                    "gps": f"{user.gps_latitude}, {user.gps_longitude}" if user.gps_latitude and user.gps_longitude else "Not available",
+                    "nearbyAccommodation": user.hotel_name or user.address or "Not specified"
+                }
+                
+                # Prepare trip data structure (use most recent travel record if available)
+                if travel_records:
+                    latest_trip = travel_records[0]  # Assuming most recent is first
+                    trip_data = {
+                        "destination": f"{latest_trip.city}, {latest_trip.country}",
+                        "date": latest_trip.travel_date or "Unknown"
+                    }
+                else:
+                    trip_data = {
+                        "destination": "Unknown",
+                        "date": "Unknown"
+                    }
+                
+                # Prepare contact data structure
+                contact_data = {
+                    "primary": {
+                        "name": primary_contact.contact_name,
+                        "relationship": primary_contact.relationship or "Unknown",
+                        "phone": primary_contact.phone or "Not available",
+                        "whatsapp": primary_contact.whatsapp or primary_contact.phone
+                    },
+                    "secondary": {
+                        "name": secondary_contact.contact_name,
+                        "relationship": secondary_contact.relationship or "Unknown",
+                        "phone": secondary_contact.phone or "Not available",
+                        "whatsapp": secondary_contact.whatsapp or secondary_contact.phone
+                    } if secondary_contact else None
                 }
                 
                 print(f"\n📱 INITIATING EMERGENCY CALL TO: {primary_contact.contact_name} ({primary_contact.relationship})")
                 print(f"   Phone: {primary_contact.phone}")
                 print(f"   Priority: {primary_contact.priority}")
-                print(f"   Emergency Context Sent to Vapi: {emergency_context_dict}")
+                print(f"   Traveler Data: {traveler_data}")
+                print(f"   SOS Data: {sos_data}")
+                print(f"   Trip Data: {trip_data}")
+                print(f"   Contact Data: {contact_data}")
                 
-                # Make the emergency call via Vapi
-                vapi_response = make_emergency_call(primary_contact.phone, emergency_context_dict)
+                # Make the emergency call via Vapi with dynamic variables
+                vapi_response = make_emergency_call(
+                    phone_number=primary_contact.phone,
+                    traveler=traveler_data,
+                    sos_data=sos_data,
+                    trip_data=trip_data,
+                    contact_data=contact_data,
+                    user_id=user.id,
+                    contact_id=primary_contact.id
+                )
+                
+                # Create emergency context dictionary for logging and WhatsApp fallback
+                emergency_context_dict = {
+                    "traveler_name": traveler_data["name"],
+                    "current_location": traveler_data["current_location"],
+                    "gps": traveler_data["gps"],
+                    "hotel": traveler_data["hotel"],
+                    "traveler_phone": traveler_data["phone"],
+                    "signal_type": sos_data["signalType"],
+                    "contact_name": primary_contact.contact_name,
+                    "relationship": primary_contact.relationship or "Unknown",
+                    "contact_phone": primary_contact.phone
+                }
                 
                 if vapi_response:
                     print(f"\n✅ EMERGENCY CALL INITIATED SUCCESSFULLY")
@@ -299,12 +371,7 @@ def emergency_webhook(signal: EmergencySignal):
             else:
                 print("\n⚠️  No emergency contacts found")
             
-            # Get travel history
-            from models.travel_history import TravelHistory
-            travel_records = db.query(TravelHistory).filter(
-                TravelHistory.user_id == user.id
-            ).all()
-            
+            # Travel history already retrieved above for trip data
             if travel_records:
                 print("\n✈️  TRAVEL HISTORY:")
                 print("-" * 60)
@@ -318,7 +385,7 @@ def emergency_webhook(signal: EmergencySignal):
                 print("\n⚠️  No travel history found")
                 
             # Generate and print the emergency context
-            emergency_context = generate_emergency_context(user, travel_records, contacts)
+            emergency_context = generate_emergency_context(user, travel_records, contacts, signal)
             print(emergency_context)
         else:
             print(f"\n❌ User '{signal.user_name}' not found in database")

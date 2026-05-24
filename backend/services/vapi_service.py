@@ -33,14 +33,24 @@ class VapiService:
     def make_emergency_call(
         self,
         phone_number: str,
-        emergency_context: Dict[str, Any]
+        traveler: Dict[str, Any],
+        sos_data: Dict[str, Any],
+        trip_data: Dict[str, Any],
+        contact_data: Dict[str, Any],
+        user_id: Optional[int] = None,
+        contact_id: Optional[int] = None
     ) -> Optional[Dict[str, Any]]:
         """
-        Makes an outbound emergency call using Vapi API.
+        Makes an outbound emergency call using Vapi API with dynamic variable injection.
 
         Args:
             phone_number: Destination phone number
-            emergency_context: Emergency metadata/context
+            traveler: Traveler information (name, phone, email, location, etc.)
+            sos_data: SOS signal details (status, type, timestamp, location, GPS)
+            trip_data: Trip information (destination, date)
+            contact_data: Emergency contact information (primary and secondary)
+            user_id: ID of the user triggering the emergency
+            contact_id: ID of the emergency contact being called
 
         Returns:
             Dict response from Vapi or None
@@ -58,8 +68,8 @@ class VapiService:
                 "message": "Missing Vapi environment configuration"
             }
 
-        # Updated Vapi endpoint for phone calls
-        url = f"{VAPI_BASE_URL}/call/phone"
+        # Vapi endpoint for initiating calls
+        url = f"{VAPI_BASE_URL}/call"
 
         # Headers
         headers = {
@@ -67,14 +77,29 @@ class VapiService:
             "Content-Type": "application/json"
         }
 
-        # Payload with metadata only
+        # Prepare metadata with user and contact IDs for webhook handling
+        metadata = {
+            "user_id": user_id,
+            "contact_id": contact_id,
+            "contact_phone": phone_number
+        }
+
+        # Payload with dynamic variable injection via assistantOverrides
         payload = {
             "assistantId": self.assistant_id,
             "phoneNumberId": self.phone_number_id,
             "customer": {
                 "number": phone_number
             },
-            "metadata": emergency_context
+            "metadata": metadata,
+            "assistantOverrides": {
+                "variableValues": {
+                    "traveler": traveler,
+                    "sos": sos_data,
+                    "trip": trip_data,
+                    "contact": contact_data
+                }
+            }
         }
 
         try:
@@ -84,7 +109,10 @@ class VapiService:
             logger.info(f"Destination Number: {phone_number}")
             logger.info(f"Assistant ID: {self.assistant_id}")
             logger.info(f"Phone Number ID: {self.phone_number_id}")
-            logger.info(f"Emergency Context: {emergency_context}")
+            logger.info(f"Traveler: {traveler}")
+            logger.info(f"SOS Data: {sos_data}")
+            logger.info(f"Trip Data: {trip_data}")
+            logger.info(f"Contact Data: {contact_data}")
             logger.info(f"Payload: {payload}")
 
             # Retry logic - try up to 3 times with increasing timeouts
@@ -171,10 +199,15 @@ except Exception as e:
 
 def make_emergency_call(
     phone_number: str,
-    emergency_context: Dict[str, Any]
+    traveler: Dict[str, Any],
+    sos_data: Dict[str, Any],
+    trip_data: Dict[str, Any],
+    contact_data: Dict[str, Any],
+    user_id: Optional[int] = None,
+    contact_id: Optional[int] = None
 ) -> Optional[Dict[str, Any]]:
     """
-    Wrapper function for emergency calling
+    Wrapper function for emergency calling with dynamic variables
     """
 
     if not vapi_service:
@@ -187,5 +220,10 @@ def make_emergency_call(
 
     return vapi_service.make_emergency_call(
         phone_number,
-        emergency_context
+        traveler,
+        sos_data,
+        trip_data,
+        contact_data,
+        user_id,
+        contact_id
     )
